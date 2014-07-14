@@ -1,6 +1,7 @@
 /*
- * A simple macro for bulk exporting all datasets in a library into .csv.
- * Tested on SAS9.0
+ * A simple macro for bulk export of all datasets in library into .csv.
+ * In addition, it extracts metadata and dumps labels of empty datasets.
+ * Tested on SAS9.0+
  */
 
 /*
@@ -36,9 +37,33 @@
 
 	* export each data set ;
 	%do i=1 %to &dslen;
-	proc export data = &library..&&d&i
-            outfile = "&path&&d&i...csv" 
-            dbms = csv replace;
-	run;
+		%local obssize;
+
+		proc sql noprint;
+			select count(*) into :obssize from &library..&&d&i;
+			%put &obssize;
+		quit;	
+
+		proc contents data = &library..&&d&i noprint out = td;
+		run;	
+
+		%if &obssize = 0 %then 
+			%do;
+				ods csv body="&path.empties\&&d&i...csv";
+				proc print data=td noobs;
+					var label;
+				run;
+				ods csv close;
+			%end;
+
+		ods csv body="&path.meta\&&d&i...csv";
+		proc print data=td noobs;
+		run;
+		ods csv close;
+
+		proc export data = &library..&&d&i
+       		outfile = "&path.export\&&d&i...csv" 
+           	dbms = csv replace;
+		run;
 	%end;
 %mend;
